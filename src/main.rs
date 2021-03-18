@@ -14,5 +14,7 @@ fn main() {
             }
             None => (),
         }
+    } else {
+        println!("Done!")
     }
 }

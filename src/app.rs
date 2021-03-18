@@ -1,5 +1,8 @@
 use clap::{self, value_t, Arg};
 use error_chain::error_chain;
+use indicatif::ParallelProgressIterator;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::*;
 use std::{env, path::PathBuf, result};
 
 use crate::dir;
@@ -19,14 +22,14 @@ pub struct App<'a>(pub clap::App<'a, 'a>);
 
 impl<'a> App<'a> {
     fn margin_validator(s: String) -> result::Result<(), String> {
-        s.parse::<u32>().map_err(|_| "Not a positive number")?;
+        s.parse::<u32>().map_err(|_| "should be > 0")?;
         Ok(())
     }
 
     fn parts_validator(s: String) -> result::Result<(), String> {
-        let parts_len: usize = s.parse().map_err(|_| "Not a positive number")?;
+        let parts_len: usize = s.parse().map_err(|_| "should be > 0")?;
         if parts_len < 1 {
-            Err(String::from("Not greater than 1"))
+            Err(String::from("should be > 1"))
         } else {
             Ok(())
         }
@@ -94,7 +97,7 @@ impl<'a> App<'a> {
 
         if paths_len % 2 != 0 {
             return Err(format!(
-                "The number of pictures must be a multiple of 2 (got `{}`)",
+                "The number of pictures must be a multiple of 2 (got {})",
                 paths_len
             )
             .into());
@@ -102,17 +105,55 @@ impl<'a> App<'a> {
 
         if paths_len % parts_len != 0 {
             return Err(format!(
-                "The number of pictures must be a multiple of {} (got `{}`)",
+                "The number of pictures must be a multiple of {} (got {})",
                 parts_len, paths_len
             )
             .into());
         };
 
         let chunks = paths.chunks(paths_len / parts_len).collect::<Vec<_>>();
-        for (idx, chunk) in chunks.iter().enumerate() {
-            let prefix = format!("{:0fill$}", idx + 1, fill = chunks.len() / 10);
-            img::process(&output, margin, &prefix, &chunk)?;
+        let zero_fill_len = chunks.len() / 10;
+        let mut errs = vec![];
+
+        for (idx, &chunk) in chunks.iter().enumerate() {
+            let prefix = format!("{:0fill$}", idx + 1, fill = zero_fill_len);
+            errs.extend(
+                chunk
+                    .par_iter()
+                    .enumerate()
+                    .progress_count(chunk.len() as u64)
+                    .map(|(idx, path)| {
+                        let zero_fill_len = chunk.len() / 10;
+                        img::process(
+                            &output,
+                            margin,
+                            &prefix,
+                            idx,
+                            &path,
+                            paths_len * 2,
+                            zero_fill_len,
+                        )
+                        .chain_err(|| {
+                            format!("Could not process picture `{}`", path.to_string_lossy())
+                        })
+                    })
+                    .filter_map(|res| res.err())
+                    .collect::<Vec<_>>(),
+            );
         }
+
+        if !errs.is_empty() {
+            errs.iter().for_each(|ref errs| {
+                let mut errs = errs.iter();
+                match errs.next() {
+                    None => (),
+                    Some(err) => {
+                        eprintln!("{}", err);
+                        errs.for_each(|err| eprintln!(" ↳ {}", err));
+                    }
+                }
+            })
+        };
 
         Ok(())
     }
