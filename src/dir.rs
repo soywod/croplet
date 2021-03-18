@@ -15,7 +15,7 @@ fn is_a_picture(file: DirEntry) -> Option<PathBuf> {
     let path = file.path();
     let ext = path.extension()?.to_str()?;
 
-    if ["jpg", "jpeg", "tiff"].iter().any(|&e| e == ext) {
+    if ["jpg", "jpeg", "tif"].iter().any(|&e| e == ext) {
         Some(path)
     } else {
         None

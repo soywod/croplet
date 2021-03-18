@@ -1,10 +1,10 @@
 use error_chain::error_chain;
-use image::{imageops, GenericImageView};
+use image::imageops;
 use std::path::{Path, PathBuf};
 
 error_chain! {}
 
-pub fn process(dir: &Path, paths: &[PathBuf]) -> Result<()> {
+pub fn process(dir: &Path, margin: u32, chunk_prefix: &str, paths: &[PathBuf]) -> Result<()> {
     let pages_count = paths.len() * 2;
 
     for (idx, path) in paths.iter().enumerate() {
@@ -12,19 +12,49 @@ pub fn process(dir: &Path, paths: &[PathBuf]) -> Result<()> {
             .file_name()
             .ok_or_else(|| format!("Invalid filename `{}`", path.to_string_lossy()))?
             .to_string_lossy();
-        let mut img = image::open(&path)
+
+        println!("Processing `{}`:", filename);
+        println!(" [Opening]");
+        let img = image::open(&path)
             .chain_err(|| format!("Cannot open image `{}`", path.to_string_lossy()))?;
+
+        println!(" [Rotating]");
+        let mut img = if idx % 2 == 0 {
+            imageops::rotate90(&img)
+        } else {
+            imageops::rotate270(&img)
+        };
         let (width, height) = img.dimensions();
 
-        let left = imageops::crop(&mut img, 0, 0, width / 2, height).to_image();
+        println!(" [Croping left]");
+        let left = imageops::crop(
+            &mut img,
+            margin,
+            margin,
+            width / 2 - margin,
+            height - margin,
+        )
+        .to_image();
         let mut left_path = dir.to_path_buf();
-        left_path.push(format!("{}-{}", idx + 1, filename));
+        let prefix = format!("{:0fill$}", pages_count - idx, fill = paths.len() / 10);
+        left_path.push(format!("{}__{}_{}", chunk_prefix, prefix, filename));
+        println!(" [Saving left]");
         left.save(&left_path)
             .chain_err(|| format!("Cannot save left part of `{}`", &filename))?;
 
-        let right = imageops::crop(&mut img, width / 2, 0, width, height).to_image();
+        println!(" [Croping right]");
+        let right = imageops::crop(
+            &mut img,
+            width / 2 - margin,
+            margin,
+            width - margin,
+            height - margin,
+        )
+        .to_image();
         let mut right_path = dir.to_path_buf();
-        right_path.push(format!("{}-{}", pages_count - idx, filename));
+        let prefix = format!("{:0fill$}", idx + 1, fill = paths.len() / 10);
+        right_path.push(format!("{}__{}_{}", chunk_prefix, prefix, filename));
+        println!(" [Saving right]");
         right
             .save(&right_path)
             .chain_err(|| format!("Cannot save right part of `{}`", &filename))?;
