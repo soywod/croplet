@@ -29,7 +29,7 @@ impl<'a> App<'a> {
     fn parts_validator(s: String) -> result::Result<(), String> {
         let parts_len: usize = s.parse().map_err(|_| "should be > 0")?;
         if parts_len < 1 {
-            Err(String::from("should be > 1"))
+            Err(String::from("should be > 0"))
         } else {
             Ok(())
         }
@@ -75,12 +75,6 @@ impl<'a> App<'a> {
                         .value_name("INT")
                         .default_value("1")
                         .validator(Self::parts_validator),
-                )
-                .arg(
-                    Arg::with_name("reverse")
-                        .long("reverse")
-                        .short("r")
-                        .help("Reverses the order"),
                 ),
         )
     }

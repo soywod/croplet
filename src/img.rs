@@ -51,7 +51,7 @@ where
 
     let right = imageops::crop(
         &mut img,
-        width / 2 - margin,
+        width / 2 + margin,
         margin,
         width - margin,
         height - margin,
