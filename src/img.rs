@@ -25,22 +25,17 @@ where
 
     let img = image::open(&path)
         .chain_err(|| format!("Cannot open image `{}`", path.as_ref().to_string_lossy()))?;
-
     let mut img = if even_idx {
         imageops::rotate90(&img)
     } else {
         imageops::rotate270(&img)
     };
     let (width, height) = img.dimensions();
+    let mut img =
+        imageops::crop(&mut img, margin, margin, width - margin, height - margin).to_image();
+    let (width, height) = img.dimensions();
 
-    let left = imageops::crop(
-        &mut img,
-        margin,
-        margin,
-        width / 2 - margin,
-        height - margin,
-    )
-    .to_image();
+    let left = imageops::crop(&mut img, 0, 0, width / 2, height).to_image();
     let cursor = if even_idx { pages_count - idx } else { idx + 1 };
     let prefix = format!("{:0fill$}", cursor, fill = scanned_pages_len);
     let left_path = dir
@@ -49,14 +44,7 @@ where
     left.save(&left_path)
         .chain_err(|| format!("Cannot save left part of `{}`", &filename))?;
 
-    let right = imageops::crop(
-        &mut img,
-        width / 2 + margin,
-        margin,
-        width - margin,
-        height - margin,
-    )
-    .to_image();
+    let right = imageops::crop(&mut img, width / 2, 0, width, height).to_image();
     let cursor = if even_idx { idx + 1 } else { pages_count - idx };
     let prefix = format!("{:0fill$}", cursor, fill = scanned_pages_len);
     let right_path = dir
